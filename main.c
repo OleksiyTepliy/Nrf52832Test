@@ -50,20 +50,95 @@ static void clockInit(void)
     while(!(CLOCK_HFCLK_STAT & 0x01 << 16));
 }
 
+typedef enum TIMER_BASE_ADDRESS {
+    TIMER0_BASE_ADDRESS = 0x40008000,
+    TIMER1_BASE_ADDRESS = 0x40009000,
+    TIMER2_BASE_ADDRESS = 0x4000A000, 
+    TIMER3_BASE_ADDRESS = 0x4001A000, 
+    TIMER4_BASE_ADDRESS = 0x4001B000,
+} TIMER_BASE_ADDRESS;
+
+#define TIMER_TASKS_START *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x000)) // Start Timer
+#define TIMER_TASKS_STOP *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x004)) // Stop Timer
+#define TIMER_TASKS_COUNT *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x008)) // Increment Timer (Counter mode only)
+#define TIMER_TASKS_CLEAR *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x00C)) // Clear time
+#define TIMER_TASKS_SHUTDOWN *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x010)) // Shut down timer
+
+//TASKS_CAPTURE[0] 0x040 Capture Timer value to CC[0] register
+//TASKS_CAPTURE[1] 0x044 Capture Timer value to CC[1] register
+//TASKS_CAPTURE[2] 0x048 Capture Timer value to CC[2] register
+//TASKS_CAPTURE[3] 0x04C Capture Timer value to CC[3] register
+//TASKS_CAPTURE[4] 0x050 Capture Timer value to CC[4] register
+//TASKS_CAPTURE[5] 0x054 Capture Timer value to CC[5] register
+//EVENTS_COMPARE[0] 0x140 Compare event on CC[0] match
+//EVENTS_COMPARE[1] 0x144 Compare event on CC[1] match
+//EVENTS_COMPARE[2] 0x148 Compare event on CC[2] match
+//EVENTS_COMPARE[3] 0x14C Compare event on CC[3] match
+//EVENTS_COMPARE[4] 0x150 Compare event on CC[4] match
+//EVENTS_COMPARE[5] 0x154 Compare event on CC[5] match
+
+#define TIMER_SHORTS *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x200)) // Shortcut register
+#define TIMER_INTENSET *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x304)) // Enable interrupt
+#define TIMER_INTENCLR *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x308)) // Disable interrupt
+#define TIMER_MODE *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x504)) // Timer mode selection
+#define TIMER_BITMODE *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x508)) // Configure the number of bits used by the TIMER
+#define TIMER_PRESCALER *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x510)) // Timer prescaler register
+
+#define TIMER_CAPTURE_COMPARE0 *((volatile uint32_t *) (TIMER0_BASE_ADDRESS + 0x540)) // Capture/Compare register 0
+//CC[1] 0x544 Capture/Compare register 1
+//CC[2] 0x548 Capture/Compare register 2
+//CC[3] 0x54C Capture/Compare register 3
+//CC[4] 0x550 Capture/Compare register 4
+//CC[5] 0x554 Capture/Compare register 5
+
+// fTIMER = 16 MHz / (2PRESCALER)
+static timerInit(void)
+{
+    TIMER_TASKS_STOP |= 0x01;
+    TIMER_TASKS_CLEAR |= 0x01;
+    TIMER_MODE &= 0x00; // Timer 0 Select Timer mode
+    TIMER_BITMODE = 0x03; // 3 - 32 bit timer bit width
+    TIMER_PRESCALER = 0x02; // 2 divider
+    TIMER_CAPTURE_COMPARE0 = 4000000; // blink every 0.5 sec
+    TIMER_INTENSET |= 0x01 << 16; // enable CC[0] interrupt
+}
+
+static startTimer(void)
+{
+    TIMER_TASKS_STOP |= 0x01;
+    TIMER_TASKS_CLEAR |= 0x01;
+    TIMER_TASKS_START |= 0x01;
+}
+
+static stopTimer(void)
+{
+    TIMER_TASKS_STOP |= 0x01;
+}
+
+uint32_t state = 0x01;
+
 int main(void)
 {
     clockInit();
+    timerInit();
+    startTimer();
     SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_BLOCK_IF_FIFO_FULL);
     SEGGER_RTT_WriteString(0, "SEGGER Real-Time-Terminal Sample\r\n\r\n");
     gpioPinSetDir(GPIO_PIN_DIR_OUTPUT, 5);
-    uint32_t state = 0x01;
+    
     /* Toggle LEDs. */
     while (true)
     {
-        gpioWritePin(5, state);
-        for (volatile uint32_t i = 0; i < 1000000; i++);
-        state ^= 0x01;        
+        //gpioWritePin(5, state);
+       // for (volatile uint32_t i = 0; i < 1000000; i++);
+        //state ^= 0x01;        
     }
 }
+
+void TIMER0_IRQHandler(void)
+{
+    gpioWritePin(5, state ^= 0x01);
+}
+
 
 /*************************** End of file ****************************/
